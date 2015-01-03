@@ -29,6 +29,7 @@ params='{"alt":"json", "q":"chrome"}'
 handleAs="json"
 on-core-response="{{handleResponse}}"
 cacheResponse="true"
+cacheTTL=60
 key="localStorageKey"></cachable-expirable-ajax>
 
 @element cachable-expirable-ajax
@@ -36,118 +37,133 @@ key="localStorageKey"></cachable-expirable-ajax>
 @homepage http://domderen.github.io/cachable-expirable-ajax
 -->
 <polymer-element name="cachable-expirable-ajax" hidden extends="core-ajax" attributes="cacheResponse">
-  <script>
-    (function () {
-      var store = document.createElement('core-localstorage');
-      var self;
-      var resolveRequestPromise;
-      var rejectRequestPromise;
+    <script>
+    (function() {
+        var store = document.createElement('core-localstorage');
+        var self;
+        var resolveRequestPromise;
+        var rejectRequestPromise;
 
-      Polymer({
-        /**
-         * Fired when a response is received. In cached content is found, this event will be fired twice.
-         *
-         * @event cachable-response
-         */
+        Polymer({
+            /**
+             * Fired when a response is received. In cached content is found, this event will be fired twice.
+             *
+             * @event cachable-response
+             */
 
-        /**
-         * Fired when an error is received.
-         *
-         * @event core-error
-         */
+            /**
+             * Fired when an error is received.
+             *
+             * @event core-error
+             */
 
-        /**
-         * Fired whenever a response or an error is received.
-         *
-         * @event core-complete
-         */
+            /**
+             * Fired whenever a response or an error is received.
+             *
+             * @event core-complete
+             */
 
-        /**
-         * `cacheResponse` is a property defining if the ajax response should be cached using the local storage.
-         *
-         * @property cacheResponse
-         * @type bool
-         * @default true
-         */
-        cacheResponse: true,
+            /**
+             * `cacheResponse` is a property defining if the ajax response should be cached using the local storage.
+             *
+             * @property cacheResponse
+             * @type bool
+             * @default true
+             */
+            cacheResponse: true,
 
-        /**
-         * `storageKey` is a property defining the key to use in communication with local storage.
-         * If the value is falsy, storage key will be generated based on the request parameters.
-         *
-         * @property storageKey
-         * @type string
-         * @default undefined
-         */
-        storageKey: undefined,
+            /**
+             * `cacheTTL` is a property defining after how many seconds the cache entry should be invalidated.
+             *
+             * @property cacheTTL
+             * @type int
+             * @default Number.MAX_VALUE
+             */
+            cacheTTL: Number.MAX_VALUE,
 
-        ready: function () {
-          self = this;
-          self.super();
+            /**
+             * `storageKey` is a property defining the key to use in communication with local storage.
+             * If the value is falsy, storage key will be generated based on the request parameters.
+             *
+             * @property storageKey
+             * @type string
+             * @default undefined
+             */
+            storageKey: undefined,
 
-          store.useRaw = false;
-          store.autoSaveDisabled = true;
-          store.addEventListener('core-localstorage-load', function () {
-            self.fire('core-response', {response: store.value});
-          });
-        },
+            ready: function() {
+                self = this;
+                self.super();
 
-        /**
-         * Performs an Ajax request to the specified URL. If cacheResponse is set to true,
-         * it also tries to load the value for this request from the localstorage.
-         *
-         * @method go
-         * @returns (Promise) A promise object that will be resolved with the server response.
-         */
-        go: function () {
-          return new Promise(function (resolve, reject) {
-            resolveRequestPromise = resolve;
-            rejectRequestPromise = reject;
+                store.useRaw = false;
+                store.autoSaveDisabled = true;
+                store.addEventListener('core-localstorage-load', function() {
+                    if (store.value.expire > Date.now()) {
+                        self.fire('core-response', {
+                            response: store.value.data
+                        });
+                    }
+                });
+            },
 
-            var key;
-            self.xhrArgs = self.xhrArgs || {};
+            /**
+             * Performs an Ajax request to the specified URL. If cacheResponse is set to true,
+             * it also tries to load the value for this request from the localstorage.
+             *
+             * @method go
+             * @returns (Promise) A promise object that will be resolved with the server response.
+             */
+            go: function() {
+                return new Promise(function(resolve, reject) {
+                    resolveRequestPromise = resolve;
+                    rejectRequestPromise = reject;
 
-            //TODO: This looks like an unnecessary dirty hack. Is that necessary?
-            // This is equivalent with 'this.super()', but for some reason, the proper version
-            // does not want to work here. Probably some internal Polymer issue?
-            self.__proto__.__proto__.go.call(self);
-            // https://github.com/Polymer/polymer/issues/898
+                    var key;
+                    self.xhrArgs = self.xhrArgs || {};
 
-            if (self.cacheResponse) {
-              if (self.storageKey) {
-                key = self.storageKey;
-              } else {
-                key = md5(self.args);
-              }
+                    //TODO: This looks like an unnecessary dirty hack. Is that necessary?
+                    // This is equivalent with 'this.super()', but for some reason, the proper version
+                    // does not want to work here. Probably some internal Polymer issue?
+                    self.__proto__.__proto__.go.call(self);
+                    // https://github.com/Polymer/polymer/issues/898
 
-              store.name = key;
-              store.load();
+                    if (self.cacheResponse) {
+                        if (self.storageKey) {
+                            key = self.storageKey;
+                        } else {
+                            key = md5(self.args);
+                        }
+
+                        store.name = key;
+                        store.load();
+                    }
+                });
+            },
+            processError: function(xhr) {
+                self.super([xhr]);
+
+                if (rejectRequestPromise) {
+                    rejectRequestPromise(self.error);
+                }
+
+            },
+            processResponse: function(xhr) {
+                self.super([xhr]);
+
+                if (self.cacheResponse && store.name) {
+                    store.value = {
+                        expire: Date.now() + self.cacheTTL,
+                        data: self.response
+                    };
+                    store.save();
+                }
+
+                if (resolveRequestPromise) {
+                    resolveRequestPromise(self.response);
+                }
             }
-          });
-        },
-        processError: function (xhr) {
-          self.super([xhr]);
-
-          if(rejectRequestPromise) {
-            rejectRequestPromise(self.error);
-          }
-
-        },
-        processResponse: function (xhr) {
-          self.super([xhr]);
-
-          if (self.cacheResponse && store.name) {
-            store.value = self.response;
-            store.save();
-          }
-
-          if(resolveRequestPromise) {
-            resolveRequestPromise(self.response);
-          }
-        }
-      });
+        });
     })();
-
-  </script>
+    </script>
 
 </polymer-element>

@@ -1,6 +1,6 @@
 {
   "name": "cachable-expirable-ajax",
-  "version": "0.3.1",
+  "version": "0.0.1",
   "keywords": [
     "seed",
     "polymer",
@@ -11,12 +11,12 @@
   ],
   "main": "cachable-expirable-ajax.html",
   "dependencies": {
-    "polymer": "Polymer/polymer#^0.4.2",
-    "core-ajax": "Polymer/core-ajax#~0.4.2",
-    "core-localstorage": "Polymer/core-localstorage#~0.4.2",
+    "polymer": "Polymer/polymer#^0.5.2",
+    "core-ajax": "Polymer/core-ajax#~0.5.1",
+    "core-localstorage": "Polymer/core-localstorage#~0.5.1",
     "js-md5": "~1.1.0"
   },
   "devDependencies": {
-    "polymer-test-tools": "Polymer/polymer-test-tools#^0.4.0"
+    "polymer-test-tools": "Polymer/polymer-test-tools#^0.5.1"
   }
 }
